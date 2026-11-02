@@ -143,14 +143,15 @@ async function api(req,res,url){
       // functions handle and persist their own errors while cached DB totals render.
       void syncAuthorizeRefunds();
       void syncZenChargebacks();
-      const period=reportRange(url),params=[period.start,period.end],[orders,spend,items,refundItems,chargebackItems]=await Promise.all([
+      const period=reportRange(url),params=[period.start,period.end],[orders,spend,items,refundItems,chargebackTotal,chargebackItems]=await Promise.all([
         one(`SELECT COALESCE(SUM(amount),0) gross_revenue,COALESCE(SUM(refunded_amount),0) refunds,MIN(created_at) first_order_at FROM orders WHERE status='paid' AND amount<=${MAX_REPORTED_ORDER_AMOUNT} AND updated_at >= $1 AND updated_at < $2`,params),
         one(`SELECT COALESCE(SUM(amount),0) total FROM traffic_spend WHERE spend_date >= ($1::timestamptz AT TIME ZONE 'America/Chicago')::date AND spend_date < ($2::timestamptz AT TIME ZONE 'America/Chicago')::date`,params),
         many(`SELECT id,spend_date,amount,clicks,impressions,source,notes,created_at FROM traffic_spend WHERE spend_date >= ($1::timestamptz AT TIME ZONE 'America/Chicago')::date AND spend_date < ($2::timestamptz AT TIME ZONE 'America/Chicago')::date ORDER BY spend_date DESC,id DESC`,params),
         many(`SELECT r.id,r.amount,r.action,r.updated_at,l.first_name,l.last_name,l.email,o.product_name FROM refunds r JOIN orders o ON o.id=r.order_id JOIN leads l ON l.id=r.lead_id WHERE r.status='succeeded' AND o.amount<=${MAX_REPORTED_ORDER_AMOUNT} AND r.updated_at >= $1 AND r.updated_at < $2 ORDER BY r.updated_at DESC,r.id DESC`,params),
+        one(`SELECT COALESCE(SUM(c.amount),0) total FROM chargebacks c LEFT JOIN orders o ON o.id=c.order_id WHERE c.status NOT IN ('won','reversed') AND COALESCE(o.amount,c.amount)<=${MAX_REPORTED_ORDER_AMOUNT} AND c.occurred_at >= $1 AND c.occurred_at < $2`,params),
         many(`SELECT c.*,l.first_name,l.last_name,l.email,o.product_name FROM chargebacks c LEFT JOIN leads l ON l.id=c.lead_id LEFT JOIN orders o ON o.id=c.order_id WHERE COALESCE(o.amount,c.amount)<=${MAX_REPORTED_ORDER_AMOUNT} AND c.occurred_at >= $1 AND c.occurred_at < $2 ORDER BY c.occurred_at DESC,c.id DESC`,params)
       ]);
-      const span=new Date(period.end)-new Date(period.start),externalLargeDeals=span<=366*86400000?await untrackedLargeDeals(period.start,period.end):{amount:0,items:[]},grossRevenue=Math.max(0,Math.round((Number(orders?.gross_revenue||0)-externalLargeDeals.amount)*100)/100),refunds=Number(orders?.refunds||0),chargebacks=chargebackItems.length?539.86:0,revenue=grossRevenue-refunds,totalSpend=Number(spend?.total||0);
+      const span=new Date(period.end)-new Date(period.start),externalLargeDeals=span<=366*86400000?await untrackedLargeDeals(period.start,period.end):{amount:0,items:[]},grossRevenue=Math.max(0,Math.round((Number(orders?.gross_revenue||0)-externalLargeDeals.amount)*100)/100),refunds=Number(orders?.refunds||0),chargebacks=Number(chargebackTotal?.total||0),revenue=grossRevenue-refunds,totalSpend=Number(spend?.total||0);
       return json(res,200,{grossRevenue,refunds,chargebacks,revenue,totalSpend,profit:grossRevenue-refunds-chargebacks-totalSpend,items,refundItems,chargebackItems,refundSyncStatus,chargebackSyncStatus,excludedLargeDeals:{amount:externalLargeDeals.amount,count:externalLargeDeals.items.length}});
     }
     if(req.method==='POST'&&url.pathname==='/api/admin/traffic-spend'){

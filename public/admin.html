@@ -31,15 +31,11 @@
     </nav>
     <section class="controlbar">
       <div>
-        <label>Reporting period</label
+        <label>Reporting month</label
         ><select id="preset">
           <option value="current" selected>Current month</option>
-          <option value="month">Specific month</option>
-          <option value="total">Total</option>
+          <option value="total">All time</option>
         </select>
-      </div>
-      <div class="custom hidden" id="month-picker">
-        <label>Month<input id="month" type="month" /></label>
       </div>
       <button class="refresh" id="refresh">↻ Refresh data</button
       ><span class="updated" id="updated">Loading live data…</span>

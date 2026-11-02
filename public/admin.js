@@ -29,7 +29,7 @@ let report,
 function range() {
   const now = new Date(), p = $("#preset").value;
   if (p === "total") return { start: new Date(0).toISOString(), end: now.toISOString() };
-  const value = p === "month" ? $("#month").value : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const value = p.startsWith("month:") ? p.slice(6) : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   if (!/^\d{4}-\d{2}$/.test(value)) throw Error("Choose a valid month.");
   const [year, month] = value.split("-").map(Number), start = new Date(year, month - 1, 1), next = new Date(year, month, 1);
   if (Number.isNaN(start.valueOf())) throw Error("Choose a valid month.");
@@ -666,13 +666,6 @@ $("#tabs").onclick = (e) => {
   history.replaceState({}, "", `#${b.dataset.tab}`);
 };
 $("#preset").onchange = () => {
-  $("#month-picker").classList.toggle("hidden", $("#preset").value !== "month");
-  if ($("#preset").value !== "month") {
-    page.orders = 1;
-    loadAll();
-  }
-};
-$("#month").onchange = () => {
   page.orders = 1;
   loadAll();
 };
@@ -837,7 +830,14 @@ $("#traffic-spend-form").onsubmit = async (e) => {
 const now = new Date(),
   local = (d) =>
     new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-$("#month").value = local(now).slice(0, 7);
+const monthName = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
+$("#preset").options[0].textContent = `Current month — ${monthName.format(now)}`;
+for (let offset = 1; offset < 24; offset++) {
+  const d = new Date(now.getFullYear(), now.getMonth() - offset, 1), option = document.createElement("option");
+  option.value = `month:${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  option.textContent = monthName.format(d);
+  $("#preset").insertBefore(option, $("#preset").querySelector('[value="total"]'));
+}
 $("#traffic-spend-form").elements.spend_date.value = local(now).slice(0, 10);
 setInterval(
   () => ($("#clock").textContent = new Date().toLocaleTimeString()),

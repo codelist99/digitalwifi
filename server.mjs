@@ -106,9 +106,9 @@ function stream(file,res){if(!existsSync(file)){res.writeHead(404);return res.en
 function syncOfferPricing(pathname,html){
   html=html
     .replaceAll('https://scripts.converteai.net/e9cd97bc-7bc8-4a23-bb2f-224a56a84d6b/players/6add4403185f78840fdff033/v4/player.js','/assets/vturb-player.js')
-    .replace(/href=(['"])https:\/\/wifidigitalsystem\.com\/(vsl-e|terms|pp|refund|compliance|earnings)\1/gi,'href=$1/$2$1');
+    .replace(/href=(['"])https:\/\/wifidigitalsystem\.com\/([^'"]*)\1/gi,'href=$1/$2$1');
   html=html.replaceAll('wificode@neoai.freshdesk.com','support@kairostechnologylabs.com');
-  if(/^\/thankyou(?:\/|\/index\.html)?$/.test(pathname)){
+  if(false&&/^\/thankyou(?:\/|\/index\.html)?$/.test(pathname)){
     const bookingUrl='https://cal.com/jon19/wificode-onboarding';
     html=html
       .replaceAll('https://wificodemembers.com/auth/sign-up',bookingUrl)
@@ -188,7 +188,7 @@ async function api(req,res,url){
       if(!Number.isSafeInteger(orderId)||orderId<1)return json(res,400,{error:'Invalid order'});
       const current=await one('SELECT * FROM orders WHERE id=$1',[orderId]);
       if(!current||current.status!=='paid'||!current.transaction_id)return json(res,409,{error:'Only approved Authorize.Net transactions can be refunded'});
-      if(Number(current.amount)>MAX_REPORTED_ORDER_AMOUNT)return json(res,409,{error:'This transaction is outside the WiFiCode reporting limit'});
+      if(Number(current.amount)>MAX_REPORTED_ORDER_AMOUNT)return json(res,409,{error:'This transaction is outside the Wifi Digital System reporting limit'});
       const remaining=Number(current.amount)-Number(current.refunded_amount||0),requested=input.amount==null||input.amount===''?remaining:Number(input.amount),amount=Math.round(requested*100)/100;
       if(!Number.isFinite(amount)||amount<=0)return json(res,400,{error:'Refund amount must be greater than zero'});
       const stamp=now(),reserved=(await run(`UPDATE orders SET refunded_amount=refunded_amount+$1,refund_status='processing',refund_updated_at=$2 WHERE id=$3 AND status='paid' AND refund_status<>'processing' AND amount-refunded_amount >= $1 RETURNING *`,[amount,stamp,orderId]))[0];
@@ -235,4 +235,4 @@ export async function handler(req,res){try{let url=new URL(req.url,`http://${req
 
 export default handler;
 
-if(!process.env.VERCEL){createServer(handler).listen(port,()=>console.log(`WifiCode: http://localhost:${port} | Admin: http://localhost:${port}/admin`));setInterval(()=>processDueMessages().catch(console.error),15000).unref();processDueMessages().catch(console.error)}
+if(!process.env.VERCEL){createServer(handler).listen(port,()=>console.log(`Wifi Digital System: http://localhost:${port} | Admin: http://localhost:${port}/admin`));setInterval(()=>processDueMessages().catch(console.error),15000).unref();processDueMessages().catch(console.error)}

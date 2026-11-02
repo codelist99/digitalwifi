@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const salesOrigin = 'https://wifidigitalsystem.com';
-const funnelOrigin = 'https://getwificode.com';
+const funnelOrigin = salesOrigin;
 const salesPlayer = 'https://scripts.converteai.net/e9cd97bc-7bc8-4a23-bb2f-224a56a84d6b/players/6add4403185f78840fdff033/v4/player.js';
 const routes = [
   ['oto1', funnelOrigin], ['oto2', funnelOrigin], ['oto3', funnelOrigin],
@@ -14,7 +14,7 @@ const routes = [
 
 async function fetchPage(route, origin) {
   const response = await fetch(`${origin}/${route}`, {
-    headers: { 'user-agent': 'Mozilla/5.0 WifiCode authorized mirror' }
+    headers: { 'user-agent': 'Mozilla/5.0 DigitalWifi authorized mirror' }
   });
   if (!response.ok) throw new Error(`${route}: HTTP ${response.status}`);
   let html = await response.text();

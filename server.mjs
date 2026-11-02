@@ -106,7 +106,8 @@ function stream(file,res){if(!existsSync(file)){res.writeHead(404);return res.en
 function syncOfferPricing(pathname,html){
   html=html
     .replaceAll('https://scripts.converteai.net/e9cd97bc-7bc8-4a23-bb2f-224a56a84d6b/players/6add4403185f78840fdff033/v4/player.js','/assets/vturb-player.js')
-    .replace(/href=(['"])https:\/\/wifidigitalsystem\.com\/([^'"]*)\1/gi,'href=$1/$2$1');
+    .replace(/href=(['"])https:\/\/wifidigitalsystem\.com\/([^'"]*)\1/gi,'href=$1/$2$1')
+    .replaceAll('https:\\u002F\\u002Fwifidigitalsystem.com\\u002F','\\u002F');
   html=html.replaceAll('wificode@neoai.freshdesk.com','support@kairostechnologylabs.com');
   if(false&&/^\/thankyou(?:\/|\/index\.html)?$/.test(pathname)){
     const bookingUrl='https://cal.com/jon19/wificode-onboarding';

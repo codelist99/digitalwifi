@@ -1,0 +1,59 @@
+{
+  "salesSource": "https://wifidigitalsystem.com/vsl-e",
+  "funnelSource": "https://getwificode.com",
+  "generatedAt": "2026-11-02T21:37:19.382Z",
+  "pages": [
+    {
+      "route": "oto1",
+      "bytes": 325134
+    },
+    {
+      "route": "oto2",
+      "bytes": 326024
+    },
+    {
+      "route": "oto3",
+      "bytes": 323078
+    },
+    {
+      "route": "oto4",
+      "bytes": 322866
+    },
+    {
+      "route": "oto5",
+      "bytes": 323117
+    },
+    {
+      "route": "oto6",
+      "bytes": 322741
+    },
+    {
+      "route": "oto7",
+      "bytes": 321801
+    },
+    {
+      "route": "thankyou",
+      "bytes": 197807
+    },
+    {
+      "route": "terms",
+      "bytes": 105315
+    },
+    {
+      "route": "pp",
+      "bytes": 97176
+    },
+    {
+      "route": "refund",
+      "bytes": 96086
+    },
+    {
+      "route": "compliance",
+      "bytes": 99503
+    },
+    {
+      "route": "earnings",
+      "bytes": 94744
+    }
+  ]
+}

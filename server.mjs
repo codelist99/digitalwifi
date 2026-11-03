@@ -162,7 +162,7 @@ async function api(req,res,url){
     const member=await memberForRequest(req);if(!member)return json(res,401,{error:'Member sign-in required'});
     if(req.method==='GET'&&url.pathname==='/api/member/me'){
       const orders=await many(`SELECT product_id,product_name,updated_at FROM orders WHERE lead_id=$1 AND status='paid' ORDER BY updated_at`,[member.lead_id]);
-      return json(res,200,{member:{id:Number(member.id),email:member.email,firstName:member.first_name,lastName:member.last_name,createdAt:member.created_at},products:orders.map(item=>item.product_id)});
+      return json(res,200,{member:{id:Number(member.id),email:member.email,firstName:member.first_name,lastName:member.last_name,createdAt:member.created_at,isAdmin:Boolean(member.is_admin)},products:orders.map(item=>item.product_id)});
     }
     if(req.method==='GET'&&url.pathname==='/api/member/links')return json(res,200,{items:await many('SELECT * FROM member_links WHERE member_id=$1 ORDER BY updated_at DESC',[member.id])});
     if(req.method==='POST'&&url.pathname==='/api/member/links'){
@@ -184,6 +184,10 @@ async function api(req,res,url){
   if(req.method==='POST'&&url.pathname==='/api/admin/login'){const input=await body(req);if(!secureEqual(String(input.pin||''),'67'))return json(res,401,{error:'Incorrect PIN'});setAdminSession(req,res);return json(res,200,{ok:true})}
   if(url.pathname.startsWith('/api/admin/')){
     if(!requireAdmin(req,res))return;
+    if(req.method==='POST'&&url.pathname==='/api/admin/member-admin'){
+      const input=await body(req),email=String(input.email||'').trim().toLowerCase(),password=String(input.password||'');if(!/^\S+@\S+\.\S+$/.test(email)||password.length<8)return json(res,400,{error:'Valid email and an 8-character password are required'});
+      const result=await upsertLead({email,first_name:'Support',last_name:'Admin',source:'member_admin'}),member=await one(`INSERT INTO member_accounts(lead_id,email,password_hash,is_admin) VALUES($1,$2,$3,TRUE) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,is_admin=TRUE,updated_at=NOW() RETURNING id,email,is_admin`,[result.lead.id,email,passwordHash(password)]);return json(res,200,{ok:true,member});
+    }
     if(req.method==='POST'&&url.pathname==='/api/admin/leads/unlock'){const input=await body(req);if(!secureEqual(String(input.pin||''),'0720'))return json(res,401,{error:'Incorrect lead access PIN'});setLeadAccessSession(req,res);return json(res,200,{ok:true})}
     if(req.method==='GET'&&url.pathname==='/api/admin/report'){await syncZenChargebacks();return json(res,200,await campaignReport(url))}
     if(req.method==='GET'&&url.pathname==='/api/admin/system-audit'){

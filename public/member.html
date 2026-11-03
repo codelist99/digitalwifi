@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Wifi Digital System</title>
+  <link rel="stylesheet" href="/assets/member.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/dashboard"><span class="brand-mark">W</span><strong>WIFI DIGITAL<br>SYSTEM</strong></a>
+    <nav id="member-nav"></nav>
+    <div class="member-card"><span id="member-initials">WD</span><div><strong id="member-name">Member</strong><small>Active Member</small></div><button id="logout" title="Sign out">↪</button></div>
+  </aside>
+  <header class="mobile-header"><a class="brand" href="/dashboard"><span class="brand-mark">W</span><strong>WIFI DIGITAL SYSTEM</strong></a><button id="menu-toggle">☰</button></header>
+  <main id="app"><div class="loading">Loading your dashboard…</div></main>
+  <div id="video-modal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-card video-card"><button class="modal-close" aria-label="Close">×</button><h2 id="video-title"></h2><div class="video-frame"><iframe id="video-frame" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div></div></div>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/assets/member.js" defer></script>
+</body>
+</html>

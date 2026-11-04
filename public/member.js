@@ -1,6 +1,9 @@
 const $=selector=>document.querySelector(selector),escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const api=async(url,options={})=>{const response=await fetch(url,{...options,headers:{'content-type':'application/json',...(options.headers||{})}}),data=await response.json().catch(()=>({}));if(response.status===401){location.href='/member-login';throw Error('Sign in required')}if(!response.ok)throw Error(data.error||'Request failed');return data};
 const post=(url,data)=>api(url,{method:'POST',body:JSON.stringify(data)}),remove=url=>api(url,{method:'DELETE'});
+const memberHeartbeat=()=>fetch('/api/member/activity',{method:'POST',headers:{'content-type':'application/json'},body:'{}',keepalive:true}).catch(()=>{});
+setInterval(()=>{if(document.visibilityState==='visible')memberHeartbeat()},30000);
+addEventListener('pagehide',()=>navigator.sendBeacon('/api/member/activity',new Blob(['{}'],{type:'application/json'})));
 const toast=message=>{const node=$('#toast');node.textContent=message;node.classList.remove('hidden');setTimeout(()=>node.classList.add('hidden'),2200)};
 const copy=async text=>{await navigator.clipboard.writeText(text);toast('Copied to clipboard')};
 const video=(id,title)=>{const modal=$('#video-modal');$('#video-title').textContent=title;$('#video-frame').src=`https://player.vimeo.com/video/${id}?autoplay=1&badge=0&byline=0&portrait=0&title=0&dnt=1`;modal.classList.remove('hidden')};

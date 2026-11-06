@@ -197,16 +197,17 @@ async function api(req,res,url){
       const result=await upsertLead({email,first_name:'Support',last_name:'Admin',source:'member_admin'}),member=await one(`INSERT INTO member_accounts(lead_id,email,password_hash,is_admin) VALUES($1,$2,$3,TRUE) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,is_admin=TRUE,updated_at=NOW() RETURNING id,email,is_admin`,[result.lead.id,email,passwordHash(password)]);return json(res,200,{ok:true,member});
     }
     if(req.method==='POST'&&url.pathname==='/api/admin/leads/unlock'){const input=await body(req);if(!secureEqual(String(input.pin||''),'0720'))return json(res,401,{error:'Incorrect lead access PIN'});setLeadAccessSession(req,res);return json(res,200,{ok:true})}
-    if(req.method==='GET'&&url.pathname==='/api/admin/report'){await Promise.all([syncAuthorizeRefunds(),syncZenChargebacks()]);return json(res,200,await campaignReport(url))}
+    if(req.method==='GET'&&url.pathname==='/api/admin/report')return json(res,200,await campaignReport(url))
+    if(req.method==='POST'&&url.pathname==='/api/admin/sync-financials'){
+      await Promise.all([syncAuthorizeRefunds(),syncZenChargebacks()]);
+      return json(res,200,{ok:true,refundSyncStatus,chargebackSyncStatus});
+    }
     if(req.method==='GET'&&url.pathname==='/api/admin/system-audit'){
       const identity=await one(`SELECT current_database() database,current_user db_user`),orderProducts=await many(`SELECT product_id,product_name,MIN(amount) min_amount,MAX(amount) max_amount,COUNT(*)::int records FROM orders GROUP BY 1,2 ORDER BY 1,2`),databaseFingerprint=createHash('sha256').update(process.env.DATABASE_URL||'missing').digest('hex').slice(0,16);
       return json(res,200,{offer:'digital-wifi',gateway:'authorize_net',database:{...identity,fingerprint:databaseFingerprint},catalog:products,orderProducts});
     }
     if(req.method==='GET'&&url.pathname==='/api/admin/authorize-diagnostics'){const first=await one(`SELECT MIN(created_at) first_at FROM orders`),start=first?.first_at||new Date(Date.now()-30*86400000),report=await getSettledTransactionDiagnostics(new Date(new Date(start).getTime()-86400000),new Date()),orders=await many(`(SELECT transaction_id FROM orders WHERE transaction_id IS NOT NULL ORDER BY updated_at DESC LIMIT 20) UNION ALL (SELECT transaction_id FROM orders WHERE transaction_id IS NOT NULL ORDER BY updated_at ASC LIMIT 20)`),details=[];for(const order of orders){try{details.push(await getTransactionDetails(order.transaction_id))}catch(error){details.push({transactionId:order.transaction_id,error:error.message})}}const gatewayDates=details.map(item=>item.submittedAt).filter(Boolean).sort();return json(res,200,{...report,gatewayDateRange:{first:gatewayDates[0]||null,last:gatewayDates.at(-1)||null},orderStatusCounts:details.reduce((out,item)=>{const key=item.error?`error: ${item.error}`:`${item.transactionType||'unknown'} / ${item.status||'unknown'} / batch:${item.batchId||'none'}`;out[key]=(out[key]||0)+1;return out},{})})}
     if(req.method==='GET'&&url.pathname==='/api/admin/traffic-spend'){
-      // Finish reconciliation before calculating profit so a refresh cannot
-      // briefly render stale refund or chargeback totals.
-      await Promise.all([syncAuthorizeRefunds(),syncZenChargebacks()]);
       const period=reportRange(url),params=[period.start,period.end],[orders,refundTotal,spend,items,refundItems,chargebackTotal,chargebackItems]=await Promise.all([
         one(`SELECT COALESCE(SUM(amount),0) gross_revenue FROM orders WHERE status='paid' AND amount<=${MAX_REPORTED_ORDER_AMOUNT} AND updated_at >= $1 AND updated_at < $2`,params),
         one(`SELECT COALESCE(SUM(r.amount),0) total FROM refunds r JOIN orders o ON o.id=r.order_id WHERE r.status='succeeded' AND o.amount<=${MAX_REPORTED_ORDER_AMOUNT} AND r.created_at >= $1 AND r.created_at < $2`,params),

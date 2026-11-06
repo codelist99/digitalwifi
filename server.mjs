@@ -12,6 +12,7 @@ import { chargebackOccurredAt, getAllChargebacks } from './lib/zen-dashboard.mjs
 const root=process.cwd(),port=Number(process.env.PORT||4173),now=()=>new Date().toISOString();
 let refundSyncAt=0,refundSyncPromise,refundSyncStatus={ok:null,message:'Not checked'};
 let chargebackSyncAt=0,chargebackSyncPromise,chargebackSyncStatus={ok:null,message:'Not checked'};
+const DIGITAL_WIFI_LEGACY_CHARGEBACK_CASES=new Set(['13347747','13381314','13384080','13384083','13384086']);
 async function syncAuthorizeRefunds(){
   if(Date.now()-refundSyncAt<300000)return;
   if(refundSyncPromise)return refundSyncPromise;
@@ -35,14 +36,15 @@ async function syncZenChargebacks(){
       // local order id, amount, and transaction date all agree, preventing an
       // identically numbered order from another offer from leaking in.
       if(!order&&legacyOrderId&&transactionDate)order=await one(`SELECT * FROM orders WHERE id=$1 AND amount=$2 AND updated_at BETWEEN $3::timestamptz-INTERVAL '2 days' AND $3::timestamptz+INTERVAL '2 days'`,[legacyOrderId,Math.abs(Number(record.amount||0)),transactionDate]);
-      if(!order)continue;
+      const legacyDigital=DIGITAL_WIFI_LEGACY_CHARGEBACK_CASES.has(caseId);
+      if(!order&&!legacyDigital)continue;
       const amount=Math.abs(Number(record.amount||0));if(!caseId||!amount)continue;
       const status=String(record.status||'processed').toLowerCase(),occurred=chargebackOccurredAt(record);
       const existing=await one('SELECT id FROM chargebacks WHERE processor_case_id=$1',[caseId]);
-      await run(`INSERT INTO chargebacks(order_id,lead_id,amount,status,processor_case_id,transaction_id,reason,occurred_at,processor_type,attention,fraud,updated_at)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-        ON CONFLICT(processor_case_id) DO UPDATE SET order_id=COALESCE(excluded.order_id,chargebacks.order_id),lead_id=COALESCE(excluded.lead_id,chargebacks.lead_id),amount=excluded.amount,status=excluded.status,transaction_id=excluded.transaction_id,reason=excluded.reason,occurred_at=excluded.occurred_at,processor_type=excluded.processor_type,attention=excluded.attention,fraud=excluded.fraud,updated_at=excluded.updated_at`,
-        [order.id,order.lead_id,amount,status,caseId,String(record.transaction?.id||record.acquirerReferenceNumber||''),String(record.reason?.description||record.description||''),occurred,String(record.type||'Chargeback').toLowerCase(),String(record.attention||'').toLowerCase()==='yes',String(record.fraud||'').toLowerCase()==='yes',now()]);
+      await run(`INSERT INTO chargebacks(order_id,lead_id,amount,status,processor_case_id,transaction_id,reason,occurred_at,processor_type,attention,fraud,offer_key,updated_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'digital_wifi',$12)
+        ON CONFLICT(processor_case_id) DO UPDATE SET order_id=COALESCE(excluded.order_id,chargebacks.order_id),lead_id=COALESCE(excluded.lead_id,chargebacks.lead_id),amount=excluded.amount,status=excluded.status,transaction_id=excluded.transaction_id,reason=excluded.reason,occurred_at=excluded.occurred_at,processor_type=excluded.processor_type,attention=excluded.attention,fraud=excluded.fraud,offer_key=excluded.offer_key,updated_at=excluded.updated_at`,
+        [order?.id||null,order?.lead_id||null,amount,status,caseId,String(record.transaction?.id||record.acquirerReferenceNumber||''),String(record.reason?.description||record.description||''),occurred,String(record.type||'Chargeback').toLowerCase(),String(record.attention||'').toLowerCase()==='yes',String(record.fraud||'').toLowerCase()==='yes',now()]);
       if(order)matched++;if(existing)updated++;else imported++;
     }
     const checkedAt=now(),message=`Zen synchronized: ${records.length} chargebacks; ${imported} imported, ${updated} updated, ${matched} matched to orders`;
@@ -67,7 +69,7 @@ async function campaignReport(url){
     one(`SELECT COUNT(*) leads FROM leads WHERE created_at >= $1 AND created_at < $2`,args),
     one(`SELECT COUNT(*) attempts,COUNT(*) FILTER(WHERE status='paid') approvals,COUNT(*) FILTER(WHERE status='declined') declines,COUNT(*) FILTER(WHERE status='error') errors,COUNT(DISTINCT lead_id) payment_people,COUNT(DISTINCT lead_id) FILTER(WHERE status='paid') buyers,COUNT(DISTINCT lead_id) FILTER(WHERE status='declined') declined_people,COALESCE(SUM(amount) FILTER(WHERE status='paid'),0) revenue FROM orders WHERE amount<=${MAX_REPORTED_ORDER_AMOUNT} AND updated_at >= $1 AND updated_at < $2`,args),
     one(`SELECT COUNT(*) refunds_count,COALESCE(SUM(r.amount),0) refunds FROM refunds r JOIN orders o ON o.id=r.order_id WHERE r.status='succeeded' AND o.amount<=${MAX_REPORTED_ORDER_AMOUNT} AND r.created_at >= $1 AND r.created_at < $2`,args),
-    one(`SELECT (SELECT COUNT(*) FROM chargebacks c JOIN orders o ON o.id=c.order_id WHERE c.status NOT IN ('won','reversed') AND o.amount<=${MAX_REPORTED_ORDER_AMOUNT} AND c.occurred_at >= $1 AND c.occurred_at < $2) chargebacks_count,(SELECT COUNT(*) FROM orders WHERE status='paid' AND amount<=${MAX_REPORTED_ORDER_AMOUNT} AND updated_at >= $1 AND updated_at < $2) chargeback_sales_count`,args),
+    one(`SELECT (SELECT COUNT(*) FROM chargebacks c LEFT JOIN orders o ON o.id=c.order_id WHERE c.status NOT IN ('won','reversed') AND c.offer_key='digital_wifi' AND (o.id IS NULL OR o.amount<=${MAX_REPORTED_ORDER_AMOUNT}) AND c.occurred_at >= $1 AND c.occurred_at < $2) chargebacks_count,(SELECT COUNT(*) FROM orders WHERE status='paid' AND amount<=${MAX_REPORTED_ORDER_AMOUNT} AND updated_at >= $1 AND updated_at < $2) chargeback_sales_count`,args),
     one(`SELECT COALESCE(SUM(amount),0) traffic_spend,COALESCE(SUM(clicks),0) ad_clicks,COALESCE(SUM(impressions),0) ad_impressions FROM traffic_spend WHERE spend_date >= ($1::timestamptz AT TIME ZONE 'America/Chicago')::date AND spend_date < CASE WHEN ($2::timestamptz AT TIME ZONE 'America/Chicago')::time=time '00:00' THEN ($2::timestamptz AT TIME ZONE 'America/Chicago')::date ELSE ($2::timestamptz AT TIME ZONE 'America/Chicago')::date+1 END`,args),
     many(`SELECT COALESCE(NULLIF(page,''),'/') path,COUNT(DISTINCT ${session})::int visitors,COUNT(*)::int views FROM events WHERE type='page_view' AND created_at >= $1 AND created_at < $2 GROUP BY 1 ORDER BY views DESC LIMIT 30`,args),
     many(`SELECT COALESCE(NULLIF(metadata->>'device',''),'Unknown') device,COUNT(DISTINCT ${session})::int visitors FROM events WHERE type='page_view' AND created_at >= $1 AND created_at < $2 GROUP BY 1 ORDER BY visitors DESC`,args),
@@ -214,8 +216,8 @@ async function api(req,res,url){
         one(`SELECT COALESCE(SUM(amount),0) total FROM traffic_spend WHERE spend_date >= ($1::timestamptz AT TIME ZONE 'America/Chicago')::date AND spend_date < CASE WHEN ($2::timestamptz AT TIME ZONE 'America/Chicago')::time=time '00:00' THEN ($2::timestamptz AT TIME ZONE 'America/Chicago')::date ELSE ($2::timestamptz AT TIME ZONE 'America/Chicago')::date+1 END`,params),
         many(`SELECT id,spend_date,amount,clicks,impressions,source,notes,created_at FROM traffic_spend WHERE spend_date >= ($1::timestamptz AT TIME ZONE 'America/Chicago')::date AND spend_date < CASE WHEN ($2::timestamptz AT TIME ZONE 'America/Chicago')::time=time '00:00' THEN ($2::timestamptz AT TIME ZONE 'America/Chicago')::date ELSE ($2::timestamptz AT TIME ZONE 'America/Chicago')::date+1 END ORDER BY spend_date DESC,id DESC`,params),
         many(`SELECT r.id,r.amount,r.action,r.created_at,l.first_name,l.last_name,l.email,o.product_name FROM refunds r JOIN orders o ON o.id=r.order_id JOIN leads l ON l.id=r.lead_id WHERE r.status='succeeded' AND o.amount<=${MAX_REPORTED_ORDER_AMOUNT} AND r.created_at >= $1 AND r.created_at < $2 ORDER BY r.created_at DESC,r.id DESC`,params),
-        one(`SELECT COALESCE(SUM(c.amount),0) total FROM chargebacks c JOIN orders o ON o.id=c.order_id WHERE c.status NOT IN ('won','reversed') AND o.amount<=${MAX_REPORTED_ORDER_AMOUNT} AND c.occurred_at >= $1 AND c.occurred_at < $2`,params),
-        many(`SELECT c.*,l.first_name,l.last_name,l.email,o.product_name FROM chargebacks c JOIN orders o ON o.id=c.order_id LEFT JOIN leads l ON l.id=c.lead_id WHERE c.status NOT IN ('won','reversed') AND o.amount<=${MAX_REPORTED_ORDER_AMOUNT} AND c.occurred_at >= $1 AND c.occurred_at < $2 ORDER BY c.occurred_at DESC,c.id DESC`,params)
+        one(`SELECT COALESCE(SUM(c.amount),0) total FROM chargebacks c LEFT JOIN orders o ON o.id=c.order_id WHERE c.status NOT IN ('won','reversed') AND c.offer_key='digital_wifi' AND (o.id IS NULL OR o.amount<=${MAX_REPORTED_ORDER_AMOUNT}) AND c.occurred_at >= $1 AND c.occurred_at < $2`,params),
+        many(`SELECT c.*,l.first_name,l.last_name,l.email,COALESCE(o.product_name,'Legacy Digital WiFi order') product_name FROM chargebacks c LEFT JOIN orders o ON o.id=c.order_id LEFT JOIN leads l ON l.id=c.lead_id WHERE c.status NOT IN ('won','reversed') AND c.offer_key='digital_wifi' AND (o.id IS NULL OR o.amount<=${MAX_REPORTED_ORDER_AMOUNT}) AND c.occurred_at >= $1 AND c.occurred_at < $2 ORDER BY c.occurred_at DESC,c.id DESC`,params)
       ]);
       const grossRevenue=Number(orders?.gross_revenue||0),refunds=Number(refundTotal?.total||0),chargebacks=Number(chargebackTotal?.total||0),revenue=grossRevenue-refunds,totalSpend=Number(spend?.total||0);
       return json(res,200,{grossRevenue,refunds,chargebacks,revenue,totalSpend,profit:grossRevenue-refunds-chargebacks-totalSpend,items,refundItems,chargebackItems,refundSyncStatus,chargebackSyncStatus});

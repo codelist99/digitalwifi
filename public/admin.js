@@ -87,7 +87,7 @@ function renderOverview() {
     impressions = Number(s.ad_impressions || 0),
     cpl = s.leads ? spend / s.leads : null,
     cpa = s.buyers ? spend / s.buyers : null,
-    chargebackRatio = s.chargeback_sales_count ? pct(s.chargebacks_count, s.chargeback_sales_count) : 0,
+    chargebackRatio = Number(s.chargeback_rate || 0),
     conversionBase = clicks || s.visitors,
     conversionLabel = clicks ? "click" : "visitor",
     cvr = conversionBase ? pct(s.buyers, conversionBase) : 0,
@@ -146,7 +146,7 @@ function renderOverview() {
     kpi("CPL", cpl === null ? "—" : money(cpl), "Cost per captured lead"),
     kpi("CPA", cpa === null ? "—" : money(cpa), "Cost per buyer"),
     kpi("Clicks", integer(clicks), `${integer(impressions)} impressions`),
-    kpi("Chargeback ratio", `${chargebackRatio}%`, `${integer(s.chargebacks_count)} active cases / ${integer(s.chargeback_sales_count)} approved sales`),
+    kpi("Chargebacks", money(s.chargebacks), `${chargebackRatio}% · ${integer(s.chargebacks_count)} cases / ${integer(s.chargeback_sales_count)} approved sales`),
     kpi("CVR", `${cvr}%`, `Buyer / ${conversionLabel} conversion`),
     kpi(
       "ROAS",
@@ -159,7 +159,8 @@ function renderOverview() {
     metric("Revenue per visitor", money(s.rpv)) +
     metric("Revenue per lead", money(s.rpl)) +
     metric("Lead-to-buyer rate", `${s.lead_conversion}%`) +
-    metric("Refunds", money(s.refunds));
+    metric("Refunds", money(s.refunds)) +
+    metric("Chargebacks", `${money(s.chargebacks)} (${chargebackRatio}%)`);
   $("#quality").innerHTML =
     metric("VSL engagement", `${pct(s.video_engaged, s.visitors)}%`) +
     metric("Landing → checkout", `${checkout}%`) +

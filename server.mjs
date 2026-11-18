@@ -113,6 +113,7 @@ const memberForRequest=async req=>{const session=readMemberSession(req);return s
 
 async function body(req){const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>1e6)throw Error('Request too large');chunks.push(chunk)}const raw=Buffer.concat(chunks).toString(),type=req.headers['content-type']||'';return type.includes('application/json')?(raw?JSON.parse(raw):{}):Object.fromEntries(new URLSearchParams(raw))}
 function stream(file,res){if(!existsSync(file)){res.writeHead(404);return res.end('Not found')}res.writeHead(200,{'content-type':types[extname(file).toLowerCase()]||'application/octet-stream','cache-control':'no-cache'});createReadStream(file).pipe(res)}
+const fdidRoute=pathname=>pathname==='/checkout'||/^\/oto[1-7](?:\/|\/index\.html)?$/.test(pathname)||/^\/thankyou(?:\/|\/index\.html)?$/.test(pathname);
 
 function syncOfferPricing(pathname,html){
   html=html
@@ -120,6 +121,7 @@ function syncOfferPricing(pathname,html){
     .replace(/href=(['"])https:\/\/wifidigitalsystem\.com\/([^'"]*)\1/gi,'href=$1/$2$1')
     .replaceAll('https:\\u002F\\u002Fwifidigitalsystem.com\\u002F','\\u002F');
   html=html.replaceAll('wificode@neoai.freshdesk.com','support@kairostechnologylabs.com');
+  if(fdidRoute(pathname)&&!html.includes('/assets/fdid.js'))html=html.replace(/<\/head>/i,'<script defer src="/assets/fdid.js"></script></head>');
   if(/^\/thankyou(?:\/|\/index\.html)?$/.test(pathname)){
     const bookingUrl='https://cal.com/jon19/wificode-onboarding';
     html=html
@@ -141,6 +143,7 @@ function syncOfferPricing(pathname,html){
 }
 
 async function api(req,res,url){
+  if(req.method==='GET'&&url.pathname==='/api/fdid/config')return json(res,200,{clientId:String(process.env.FD_CLIENT_ID||'').trim()});
   if(['GET','POST'].includes(req.method)&&url.pathname==='/api/unsubscribe'){const email=String(url.searchParams.get('email')||'').trim().toLowerCase(),token=String(url.searchParams.get('token')||''),expected=email?createHmac('sha256',process.env.SESSION_SECRET||process.env.CRON_SECRET).update(email).digest('base64url'):'';if(!email||!secureEqual(token,expected))return json(res,400,{error:'Invalid unsubscribe link'});await run('UPDATE leads SET unsubscribed=TRUE,email_consent=FALSE,updated_at=$1 WHERE LOWER(email)=$2',[now(),email]);if(req.method==='POST')return json(res,200,{ok:true});res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'});return res.end('<!doctype html><meta name="viewport" content="width=device-width"><title>Unsubscribed</title><main style="max-width:560px;margin:12vh auto;padding:30px;font:18px Arial;text-align:center"><h1>You are unsubscribed</h1><p>You will no longer receive marketing emails from this offer.</p></main>')}
   if(req.method==='GET'&&url.pathname==='/api/cron/email'){const supplied=req.headers.authorization||'',expected=`Bearer ${process.env.CRON_SECRET||''}`;if(!process.env.CRON_SECRET||!secureEqual(supplied,expected))return json(res,401,{error:'Unauthorized'});return json(res,200,{ok:true,processed:await processDueMessages()})}
   if(req.method==='GET'&&url.pathname==='/api/checkout/config'){try{const product=getProduct(url.searchParams.get('product')||'front');if(!process.env.AUTHORIZE_NET_API_LOGIN_ID||!process.env.AUTHORIZE_NET_PUBLIC_CLIENT_KEY)throw Error('Checkout is not configured');return json(res,200,{gateway:'authorize_net',apiLoginId:process.env.AUTHORIZE_NET_API_LOGIN_ID,publicClientKey:process.env.AUTHORIZE_NET_PUBLIC_CLIENT_KEY,environment:process.env.AUTHORIZE_NET_ENV||'production',product:{id:product.id,name:product.name,formatted:`$${product.amount.toFixed(2)}`}})}catch(error){return json(res,400,{error:error.message})}}

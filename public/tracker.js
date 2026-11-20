@@ -3,8 +3,13 @@
   const enhanceThankYou = () => {
     document.querySelectorAll('.cta-member-access,.wc-account-section').forEach(element=>element.remove());
     document.querySelectorAll('body > aside a[href="/member-login"]').forEach(link=>link.closest('aside')?.remove());
-    const callout=document.querySelector('.wc-call-now');
-    if(!callout||callout.dataset.compactThankYou==='true')return;
+    document.querySelectorAll('a[href="/member-login"]').forEach(link=>{
+      const container=link.closest('section,aside');
+      if(container&&!container.classList.contains('wc-call-now')&&/access your|create your account|activate member access/i.test(container.textContent||''))container.remove();
+    });
+    let callout=document.querySelector('.wc-call-now');
+    if(!callout){callout=document.createElement('section');callout.className='wc-call-now';document.body.prepend(callout)}
+    if(callout.dataset.compactThankYou==='true')return;
     callout.dataset.compactThankYou='true';
     callout.classList.add('compact-thank-you');
     callout.innerHTML='<div class="compact-inner"><h1>Congratulations</h1><div class="refund-notice">FOR REFUNDS PLEASE EMAIL SUPPORT@KAIROSTECHNOLOGYLABS.COM</div><div class="dispute-warning">DO NOT FILE A DISPUTE. THEN WE ARE FORCED TO FIGHT THE DISPUTE, WHICH CAN OFTEN LEAD TO YOU LOSING. CALL US FOR A NO-QUESTIONS-ASKED REFUND.</div><h2>CALL OUR OFFICE NOW TO GET STARTED</h2><a class="phone" href="tel:+12067032153">(206) 703-2153</a><div class="action-row"><a class="schedule" href="https://cal.com/jon19/wificode-onboarding" target="_blank" rel="noreferrer noopener">SCHEDULE ONBOARDING</a><a class="member-access" href="/member-login">CREATE YOUR ACCOUNT</a></div></div>';

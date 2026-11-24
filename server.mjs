@@ -143,6 +143,16 @@ function syncOfferPricing(pathname,html){
 }
 
 async function api(req,res,url){
+  if(req.method==='POST'&&url.pathname==='/api/internal/email-relay'){
+    const supplied=String(req.headers.authorization||''),expected=`Bearer ${process.env.EMAIL_RELAY_SECRET||''}`;
+    if(!process.env.EMAIL_RELAY_SECRET||!secureEqual(supplied,expected))return json(res,401,{error:'Unauthorized'});
+    if(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM)return json(res,503,{error:'Email provider is not configured'});
+    const input=await body(req),to=String(input.to||'').trim().toLowerCase(),subject=String(input.subject||'').trim().slice(0,200),html=String(input.html||'').slice(0,100000);
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)||!subject||!html)return json(res,400,{error:'Valid recipient, subject, and HTML are required'});
+    const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${process.env.RESEND_API_KEY}`,'content-type':'application/json'},body:JSON.stringify({from:process.env.EMAIL_FROM,to:[to],subject,html})}),data=await response.json();
+    if(!response.ok)return json(res,response.status,{error:data.message||'Email delivery failed'});
+    return json(res,200,{ok:true,id:data.id});
+  }
   if(req.method==='GET'&&url.pathname==='/api/fdid/config')return json(res,200,{clientId:String(process.env.FD_CLIENT_ID||'').trim()});
   if(['GET','POST'].includes(req.method)&&url.pathname==='/api/unsubscribe'){const email=String(url.searchParams.get('email')||'').trim().toLowerCase(),token=String(url.searchParams.get('token')||''),expected=email?createHmac('sha256',process.env.SESSION_SECRET||process.env.CRON_SECRET).update(email).digest('base64url'):'';if(!email||!secureEqual(token,expected))return json(res,400,{error:'Invalid unsubscribe link'});await run('UPDATE leads SET unsubscribed=TRUE,email_consent=FALSE,updated_at=$1 WHERE LOWER(email)=$2',[now(),email]);if(req.method==='POST')return json(res,200,{ok:true});res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'});return res.end('<!doctype html><meta name="viewport" content="width=device-width"><title>Unsubscribed</title><main style="max-width:560px;margin:12vh auto;padding:30px;font:18px Arial;text-align:center"><h1>You are unsubscribed</h1><p>You will no longer receive marketing emails from this offer.</p></main>')}
   if(req.method==='GET'&&url.pathname==='/api/cron/email'){const supplied=req.headers.authorization||'',expected=`Bearer ${process.env.CRON_SECRET||''}`;if(!process.env.CRON_SECRET||!secureEqual(supplied,expected))return json(res,401,{error:'Unauthorized'});return json(res,200,{ok:true,processed:await processDueMessages()})}

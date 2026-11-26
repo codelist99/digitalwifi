@@ -59,6 +59,17 @@
   const isCheckoutDestination = value => /\/buy\//i.test(String(value || ''));
   const nativeOpen = window.open.bind(window);
   window.open = (url, ...args) => {
+    const oto = location.pathname.match(/^\/oto([1-7])\/?$/);
+    if (oto && isCheckoutDestination(url)) {
+      const target = new URL(String(url), location.href);
+      const discounted = /_downsell(?:\/)?$/i.test(target.pathname) || target.searchParams.has('coupon');
+      const product = `oto${oto[1]}${discounted ? '_downsell' : ''}`;
+      send('/api/events', { type:'checkout_click', page:location.pathname, product_id:String(url), ...context });
+      fetch('/api/purchase', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({product}) })
+        .then(async response => { const data=await response.json(); if(!response.ok)throw Error(data.error||'Purchase failed'); location.href=data.next; })
+        .catch(error => alert(error.message));
+      return null;
+    }
     if (!location.pathname.match(/^\/oto[1-7]\/?$/) && isCheckoutDestination(url)) {
       send('/api/events', { type:'checkout_click', page:location.pathname, product_id:String(url), ...context });
       location.href = '/checkout?product=front';
@@ -73,11 +84,14 @@
     const oto = location.pathname.match(/^\/oto([1-7])\/?$/);
     if (!oto) {
       event.preventDefault();
+      event.stopImmediatePropagation();
       location.href = '/checkout?product=front';
       return;
     }
     event.preventDefault();
-    const discounted = new URL(link.href, location.href).searchParams.has('coupon');
+    event.stopImmediatePropagation();
+    const target = new URL(link.href, location.href);
+    const discounted = /_downsell(?:\/)?$/i.test(target.pathname) || target.searchParams.has('coupon');
     const product = `oto${oto[1]}${discounted ? '_downsell' : ''}`;
     const label = link.textContent;
     link.style.pointerEvents = 'none';

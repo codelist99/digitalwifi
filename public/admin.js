@@ -19,6 +19,7 @@ const $ = (s) => document.querySelector(s),
   integer = (v) => new Intl.NumberFormat("en-US").format(Number(v || 0)),
   pct = (a, b) => (b ? +((a / b) * 100).toFixed(1) : 0),
   date = (v) => (v ? new Date(v).toLocaleString() : "—"),
+  gatewayName = (v) => v === "nmi" ? "NMI" : v === "authorize_net" ? "Authorize.Net" : String(v || "Unknown"),
   duration = (seconds) => {const total=Math.max(0,Number(seconds)||0),hours=Math.floor(total/3600),minutes=Math.floor(total%3600/60),secs=Math.floor(total%60);return hours?`${hours}h ${minutes}m`:minutes?`${minutes}m ${secs}s`:`${secs}s`},
   empty = (n, t = "No records in this view") =>
     `<tr><td class="empty" colspan="${n}">${t}</td></tr>`;
@@ -289,7 +290,7 @@ function renderPayments() {
     report.payments
       .map(
         (x) =>
-          `<div class="response-card"><code>${esc(x.response_code)}</code><div><b>${esc(x.response)}</b><small>${esc(x.status)} · ${x.people} people · ${money(x.amount)}</small></div><strong>${x.attempts}</strong></div>`,
+          `<div class="response-card"><code>${esc(x.response_code)}</code><div><b>${esc(x.response)}</b><small>${esc(gatewayName(x.gateway))} · ${esc(x.status)} · ${x.people} people · ${money(x.amount)}</small></div><strong>${x.attempts}</strong></div>`,
       )
       .join("") || '<div class="empty">No gateway activity</div>';
   $("#payment-health").innerHTML =
@@ -359,12 +360,12 @@ async function loadOrders() {
             ),
             action =
               o.status === "paid" && o.transaction_id && remaining > 0
-                ? `<button class="refund-button" data-order="${Number(o.id)}" data-remaining="${remaining.toFixed(2)}">Refund</button>`
+                ? `<button class="refund-button" data-order="${Number(o.id)}" data-remaining="${remaining.toFixed(2)}" data-gateway="${esc(o.gateway)}">Refund</button>`
                 : `<span class="refund-state">${esc(o.refund_status || "—")}</span>`;
-          return `<tr><td><b>${esc([o.first_name, o.last_name].filter(Boolean).join(" ") || "Unknown")}</b></td><td>${esc(o.product_name)}</td><td>${money(o.amount)}${Number(o.refunded_amount) > 0 ? `<small class="refund-note">${money(o.refunded_amount)} returned</small>` : ""}</td><td><span class="badge ${esc(o.status)}">${esc(o.status)}</span></td><td class="response">${esc(o.response_code || "—")} · ${esc(o.response_message || "—")}</td><td>${esc(o.transaction_id || "—")}</td><td>${date(o.updated_at)}</td><td>${action}</td></tr>`;
+          return `<tr><td><b>${esc([o.first_name, o.last_name].filter(Boolean).join(" ") || "Unknown")}</b></td><td>${esc(o.product_name)}</td><td>${money(o.amount)}${Number(o.refunded_amount) > 0 ? `<small class="refund-note">${money(o.refunded_amount)} returned</small>` : ""}</td><td>${esc(gatewayName(o.gateway))}</td><td><span class="badge ${esc(o.status)}">${esc(o.status)}</span></td><td class="response">${esc(o.response_code || "—")} · ${esc(o.response_message || "—")}</td><td>${esc(o.transaction_id || "—")}</td><td>${date(o.updated_at)}</td><td>${action}</td></tr>`;
         })
         .join("")
-    : empty(8);
+    : empty(9);
   pager("orders", d.pagination, "payment records");
 }
 
@@ -384,7 +385,7 @@ $("#orders-table").onclick = async (e) => {
   }
   if (
     !confirm(
-      `Process a $${amount.toFixed(2)} refund? This sends money through Authorize.Net.`,
+      `Process a $${amount.toFixed(2)} refund through ${gatewayName(button.dataset.gateway)}?`,
     )
   )
     return;
@@ -467,7 +468,7 @@ async function processRefundButton(button, order) {
   }
   if (
     !confirm(
-      `Process a $${amount.toFixed(2)} refund for ${order.product_name}? This sends money through Authorize.Net.`,
+      `Process a $${amount.toFixed(2)} refund for ${order.product_name} through ${gatewayName(order.gateway)}?`,
     )
   )
     return;
@@ -550,7 +551,7 @@ $("#sales-table").onclick = async (e) => {
       total = refunds.reduce((sum, item) => sum + item.amount, 0);
     if (
       !confirm(
-        `Refund ${refunds.length} purchases totaling ${money(total)}? Each transaction will be refunded in full through Authorize.Net.`,
+        `Refund ${refunds.length} purchases totaling ${money(total)}? Each transaction will use its original payment gateway.`,
       )
     )
       return;

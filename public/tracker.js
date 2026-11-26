@@ -56,7 +56,7 @@
     send('/api/leads', { ...data, email, phone, email_consent:Boolean(data.email_consent || form.querySelector('[name*=email_consent]:checked')),
       sms_consent:Boolean(data.sms_consent || form.querySelector('[name*=sms_consent]:checked')), landing_page:location.pathname, ...attribution });
   }, true);
-  const isCheckoutDestination = value => /jvzoo\.com\/b\/|\/buy\//i.test(String(value || ''));
+  const isCheckoutDestination = value => /\/buy\//i.test(String(value || ''));
   const nativeOpen = window.open.bind(window);
   window.open = (url, ...args) => {
     if (!location.pathname.match(/^\/oto[1-7]\/?$/) && isCheckoutDestination(url)) {
@@ -67,7 +67,7 @@
     return nativeOpen(url, ...args);
   };
   document.addEventListener('click', event => {
-    const link = event.composedPath().find(node => node?.tagName === 'A' && isCheckoutDestination(node.href)) || event.target.closest?.('a[href*="jvzoo.com"],a[href*="/b/"],a[href*="/buy/"]');
+    const link = event.composedPath().find(node => node?.tagName === 'A' && isCheckoutDestination(node.href)) || event.target.closest?.('a[href*="/buy/"]');
     if (!link) return;
     send('/api/events', { type:'checkout_click', page:location.pathname, product_id:link.href, ...context });
     const oto = location.pathname.match(/^\/oto([1-7])\/?$/);

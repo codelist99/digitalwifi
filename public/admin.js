@@ -660,7 +660,8 @@ async function loadAll() {
     renderPayments();
     renderOffers();
     renderAcquisition();
-    await loadActiveTab();
+    loadedTabs.clear();
+    await loadActiveTab(true);
     $("#updated").textContent =
       `Updated ${new Date().toLocaleTimeString()} · ${date(rep.range.start)} to ${date(rep.range.end)}`;
   } catch (e) {
@@ -924,6 +925,12 @@ const hash = location.hash.slice(1);
 if (hash && $(`[data-tab="${hash}"]`)) $(`[data-tab="${hash}"]`).click();
 loadAll();
 syncFinancials();
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    loadAll();
+    syncFinancials();
+  }
+});
 setInterval(() => {
   if (!document.hidden) {
     loadAll();

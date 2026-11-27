@@ -45,9 +45,23 @@
       send('/api/events', { type:'step2_webinar_click', page:location.pathname, product_id:target.href, ...context });
     }
   }, true);
-  if(location.pathname==='/checkout'){let started=false;document.addEventListener('focusin',event=>{if(!started&&event.target.matches('input,select')){started=true;send('/api/events',{type:'checkout_start',page:location.pathname,...context})}},true)}
+  if(location.pathname==='/checkout'){
+    let started=false,captureTimer,lastCapture='';
+    const captureCheckoutLead=()=>{
+      const email=document.getElementById('email')?.value.trim()||'',phone=document.getElementById('phone')?.value.trim()||'';
+      if(!/^\S+@\S+\.\S+$/.test(email)&&phone.replace(/\D/g,'').length<7)return;
+      const signature=`${email.toLowerCase()}|${phone}|${document.getElementById('firstName')?.value||''}|${document.getElementById('lastName')?.value||''}`;
+      if(signature===lastCapture)return;lastCapture=signature;
+      send('/api/leads',{first_name:document.getElementById('firstName')?.value||'',last_name:document.getElementById('lastName')?.value||'',email,phone,source:'checkout_abandon',email_consent:false,sms_consent:false,landing_page:'/checkout',...attribution});
+    };
+    document.addEventListener('focusin',event=>{if(!started&&event.target.matches('input,select')){started=true;send('/api/events',{type:'checkout_start',page:location.pathname,...context})}},true);
+    document.addEventListener('input',event=>{if(!event.target.matches('#email,#phone,#firstName,#lastName'))return;clearTimeout(captureTimer);captureTimer=setTimeout(captureCheckoutLead,700)},true);
+    document.addEventListener('focusout',event=>{if(event.target.matches('#email,#phone'))captureCheckoutLead()},true);
+    addEventListener('pagehide',captureCheckoutLead);
+  }
   document.querySelectorAll('video').forEach(video=>{const fired=new Set();const fire=type=>{if(fired.has(type))return;fired.add(type);send('/api/events',{type,page:location.pathname,...context})};video.addEventListener('volumechange',()=>{if(!video.muted&&video.volume>0)fire('video_unmute')});video.addEventListener('timeupdate',()=>{if(!video.duration)return;const progress=video.currentTime/video.duration;if(progress>=.25)fire('video_25');if(progress>=.5)fire('video_50');if(progress>=.75)fire('video_75');if(progress>=.98)fire('video_100')})});
   document.addEventListener('submit', event => {
+    if(location.pathname==='/checkout')return;
     const form = event.target;
     const data = Object.fromEntries(new FormData(form));
     const email = data.email || data.Email || form.querySelector('input[type=email]')?.value;
